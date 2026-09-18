@@ -16,124 +16,291 @@ jobs:
       FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
       FIREBASE_SENDER_ID: ${{ secrets.FIREBASE_SENDER_ID }}
       FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+
       KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
       KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
     steps:
 
-      # =========================================================
-      # 1. Descargar código
-      # =========================================================
+      # ============================================================
+      # 1. Descargar el repositorio
+      # ============================================================
       - name: Descargar el código del repo
         uses: actions/checkout@v4
 
-      # =========================================================
-      # 2. Java
-      # =========================================================
+
+      # ============================================================
+      # 2. Instalar Java
+      # ============================================================
       - name: Instalar Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      # =========================================================
-      # 3. Flutter
-      # =========================================================
+
+      # ============================================================
+      # 3. Instalar Flutter
+      # ============================================================
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.0'
           channel: 'stable'
+          cache: true
 
-      # =========================================================
+
+      # ============================================================
       # 4. Generar carpeta android/
-      # =========================================================
-      - name: Generar android y aplicar configuración
+      #    + widget
+      #    + Firebase
+      #    + firma
+      # ============================================================
+      - name: Generar Android y aplicar configuración
         run: |
           chmod +x .github/scripts/prepare_android.sh
           .github/scripts/prepare_android.sh
 
-      # =========================================================
-      # 5. Reconstruir keystore
-      # =========================================================
-      # El keystore se guarda en GitHub Secrets como Base64.
-      # Se reconstruye aquí para firmar el APK.
-      # =========================================================
-      - name: Reconstruir el keystore y key.properties
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/taskly-release.keystore
 
+      # ============================================================
+      # 5. Reconstruir keystore desde GitHub Secret
+      # ============================================================
+      - name: Reconstruir keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "❌ ERROR: KEYSTORE_BASE64 está vacío."
+            exit 1
+          fi
+
+          echo "Reconstruyendo taskly-release.keystore..."
+
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/taskly-release.keystore
+
+          echo "Verificando keystore..."
+
+          if [ ! -s android/taskly-release.keystore ]; then
+            echo "❌ ERROR: El keystore está vacío."
+            exit 1
+          fi
+
+          echo "✓ Keystore reconstruido correctamente."
+
+          ls -lh android/taskly-release.keystore
+
+
+      # ============================================================
+      # 6. Crear key.properties
+      #
+      # IMPORTANTE:
+      # El keystore está dentro de android/, por eso:
+      #
+      # storeFile=taskly-release.keystore
+      #
+      # NO ../taskly-release.keystore
+      # ============================================================
+      - name: Configurar firma Release
+        run: |
           cat > android/key.properties <<EOF
           storePassword=${KEYSTORE_PASSWORD}
           keyPassword=${KEY_PASSWORD}
           keyAlias=${KEY_ALIAS}
-          storeFile=../taskly-release.keystore
+          storeFile=taskly-release.keystore
           EOF
 
-      # =========================================================
-      # 6. Reconstruir Firebase
-      # =========================================================
-      # El archivo se mantiene conceptualmente en:
+          echo "✓ key.properties creado."
+
+
+      # ============================================================
+      # 7. Reconstruir google-services.json
+      #
+      # El archivo original se mantiene en:
       #
       # taskly/google-services.json
       #
-      # y luego se copia a:
+      # y se copia automáticamente a:
       #
-      # taskly/android/app/google-services.json
-      #
-      # porque Gradle necesita encontrarlo ahí.
-      # =========================================================
-      - name: Reconstruir y validar google-services.json
+      # android/app/google-services.json
+      # ============================================================
+      - name: Reconstruir google-services.json
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
-          echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > google-services.json
+          if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "❌ ERROR: GOOGLE_SERVICES_JSON_BASE64 está vacío."
+            exit 1
+          fi
 
-          echo "Validando google-services.json..."
+          echo "Reconstruyendo google-services.json..."
 
-          python3 -m json.tool google-services.json > /dev/null
+          printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > google-services.json
 
-          echo "✓ google-services.json es un JSON válido"
+          echo "Validando JSON..."
+
+          python3 - <<'PY'
+          import json
+
+          with open("google-services.json", encoding="utf-8") as f:
+              data = json.load(f)
+
+          print("✓ JSON válido.")
+
+          for client in data.get("client", []):
+              info = client.get("client_info", {})
+              package_name = info.get(
+                  "android_client_info", {}
+              ).get("package_name")
+
+              print("Package:", package_name)
+
+              for oauth in client.get("oauth_client", []):
+                  print(
+                      "OAuth:",
+                      oauth.get("client_type"),
+                      oauth.get("client_id")
+                  )
+          PY
+
+          echo "Copiando google-services.json a Android..."
 
           mkdir -p android/app
 
           cp google-services.json android/app/google-services.json
 
-          echo "✓ google-services.json copiado correctamente"
+          echo "✓ google-services.json instalado."
 
-      # =========================================================
-      # 7. Instalar dependencias
-      # =========================================================
+
+      # ============================================================
+      # 8. Instalar dependencias
+      # ============================================================
       - name: Instalar dependencias del proyecto
-        run: |
-          flutter pub get
+        run: flutter pub get
 
-      # =========================================================
-      # 8. Generar iconos y splash
-      # =========================================================
-      - name: Generar ícono y splash screen
+
+      # ============================================================
+      # 9. Generar iconos y splash
+      # ============================================================
+      - name: Generar icono y splash
         run: |
+          echo "Generando launcher icons..."
           dart run flutter_launcher_icons
+
+          echo "Generando splash..."
           dart run flutter_native_splash:create
 
-      # =========================================================
-      # 9. Generar idiomas
-      # =========================================================
-      - name: Generar archivos de idiomas
-        run: |
-          flutter gen-l10n
 
-      # =========================================================
-      # 10. Compilar APK
-      # =========================================================
-      - name: Compilar el APK
+      # ============================================================
+      # 10. Generar archivos de idiomas
+      # ============================================================
+      - name: Generar archivos de idiomas
+        run: flutter gen-l10n
+
+
+      # ============================================================
+      # 11. Mostrar configuración Android antes del build
+      # ============================================================
+      - name: Verificar configuración Android
         run: |
+          echo "=========================================="
+          echo "CONFIGURACIÓN ANDROID"
+          echo "=========================================="
+
+          echo ""
+          echo "Application ID:"
+          grep -n "applicationId" android/app/build.gradle || true
+
+          echo ""
+          echo "minSdk:"
+          grep -n "minSdk" android/app/build.gradle || true
+
+          echo ""
+          echo "Nombre de aplicación:"
+          grep -n 'android:label' android/app/src/main/AndroidManifest.xml || true
+
+          echo ""
+          echo "Google Services:"
+          ls -lh android/app/google-services.json
+
+          echo ""
+          echo "Keystore:"
+          ls -lh android/taskly-release.keystore
+
+          echo ""
+          echo "=========================================="
+
+
+      # ============================================================
+      # 12. Compilar APK Release
+      # ============================================================
+      - name: Compilar APK Release
+        run: |
+          flutter clean
+          flutter pub get
           flutter build apk --release
 
-      # =========================================================
-      # 11. Subir APK
-      # =========================================================
-      - name: Subir el APK como artifact
+
+      # ============================================================
+      # 13. Verificar SHA-1 del keystore
+      # ============================================================
+      - name: Verificar SHA-1 del keystore
+        run: |
+          echo "=========================================="
+          echo "SHA-1 DEL KEYSTORE"
+          echo "=========================================="
+
+          keytool -list -v \
+            -keystore android/taskly-release.keystore \
+            -alias "${KEY_ALIAS}" \
+            -storepass "${KEYSTORE_PASSWORD}" \
+            -keypass "${KEY_PASSWORD}" \
+            | grep -E "SHA1:|SHA256:"
+
+
+      # ============================================================
+      # 14. Verificar SHA-1 REAL DEL APK
+      #
+      # Esto nos permite comprobar que el APK Release realmente
+      # está firmado con el mismo certificado.
+      # ============================================================
+      - name: Verificar firma del APK
+        run: |
+          echo "=========================================="
+          echo "CERTIFICADO DEL APK RELEASE"
+          echo "=========================================="
+
+          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+
+          echo "Build Tools: $BUILD_TOOLS"
+
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify \
+            --verbose \
+            --print-certs \
+            build/app/outputs/flutter-apk/app-release.apk
+
+
+      # ============================================================
+      # 15. Comprobar que el APK existe
+      # ============================================================
+      - name: Verificar APK generado
+        run: |
+          if [ ! -f build/app/outputs/flutter-apk/app-release.apk ]; then
+            echo "❌ ERROR: No se encontró el APK."
+            exit 1
+          fi
+
+          echo "✓ APK generado correctamente."
+
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+
+
+      # ============================================================
+      # 16. Subir APK como Artifact
+      # ============================================================
+      - name: Subir APK
         uses: actions/upload-artifact@v4
         with:
           name: taskly-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
