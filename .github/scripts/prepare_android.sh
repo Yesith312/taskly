@@ -8,10 +8,12 @@
 set -euo pipefail
 
 echo "== 1. Generando carpeta android/ (si falta) =="
-flutter create --platforms=android --org com.taskly .
+flutter create --platforms=android --org com.taskly --project-name app .
 
 echo "== 2. Copiando archivos nativos del widget =="
 mkdir -p android/app/src/main/kotlin/com/taskly/app
+mkdir -p android/app/src/main/res/layout
+mkdir -p android/app/src/main/res/xml
 cp android_widget_files/kotlin/TasklyWidgetProvider.kt \
    android/app/src/main/kotlin/com/taskly/app/TasklyWidgetProvider.kt
 cp android_widget_files/res/layout/taskly_widget.xml \
@@ -57,4 +59,5 @@ sed -i \
   lib/firebase_options.dart
 
 echo "== Listo, carpeta android/ configurada =="
+
 
