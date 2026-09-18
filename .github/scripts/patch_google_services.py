@@ -1,33 +1,72 @@
 """
-Aplica el plugin de Google Services a los build.gradle (top-level y
-de app), necesario para que el paquete google_sign_in encuentre
-automáticamente el cliente OAuth correcto en Android.
+Aplica el plugin de Google Services, necesario para que google_sign_in
+encuentre el cliente OAuth de Android automáticamente.
+
+Flutter cambió el sistema de Gradle entre versiones: los proyectos más
+nuevos declaran los plugins con id/version dentro de settings.gradle
+(sintaxis moderna), en vez del classpath+apply plugin de antes
+(sintaxis vieja). Este script detecta cuál tiene el proyecto y lo
+aplica en el formato correcto.
 """
-import re
+GOOGLE_SERVICES_VERSION = "4.4.2"
 
-# 1. android/build.gradle (top-level): agregar el classpath del plugin
-top_path = "android/build.gradle"
-with open(top_path) as f:
-    top = f.read()
+settings_path = "android/settings.gradle"
+with open(settings_path) as f:
+    settings = f.read()
 
-if "com.google.gms:google-services" not in top:
-    top = re.sub(
-        r"(dependencies\s*\{)",
-        r"\1\n        classpath 'com.google.gms:google-services:4.4.2'",
-        top,
-        count=1,
-    )
-    with open(top_path, "w") as f:
-        f.write(top)
-
-# 2. android/app/build.gradle: aplicar el plugin al final del archivo
 app_path = "android/app/build.gradle"
 with open(app_path) as f:
     app = f.read()
 
-if "com.google.gms.google-services" not in app:
-    app += "\napply plugin: 'com.google.gms.google-services'\n"
-    with open(app_path, "w") as f:
-        f.write(app)
+modern = 'id "com.android.application"' in settings or "id 'com.android.application'" in settings
 
-print("google-services plugin aplicado en ambos build.gradle.")
+if modern:
+    print("Detectado formato moderno de Gradle (plugins en settings.gradle).")
+
+    if "com.google.gms.google-services" not in settings:
+        for needle in ['id "com.android.application"', "id 'com.android.application'"]:
+            if needle in settings:
+                settings = settings.replace(
+                    needle,
+                    needle + f'\n    id "com.google.gms.google-services" version "{GOOGLE_SERVICES_VERSION}" apply false',
+                    1,
+                )
+                break
+        with open(settings_path, "w") as f:
+            f.write(settings)
+
+    if "com.google.gms.google-services" not in app:
+        if "plugins {" in app:
+            app = app.replace(
+                "plugins {",
+                'plugins {\n    id "com.google.gms.google-services"',
+                1,
+            )
+        else:
+            app += '\napply plugin: "com.google.gms.google-services"\n'
+        with open(app_path, "w") as f:
+            f.write(app)
+
+else:
+    print("Detectado formato clásico de Gradle (buildscript en build.gradle).")
+    top_path = "android/build.gradle"
+    with open(top_path) as f:
+        top = f.read()
+
+    if "com.google.gms:google-services" not in top:
+        import re
+        top = re.sub(
+            r"(dependencies\s*\{)",
+            r"\1\n        classpath 'com.google.gms:google-services:" + GOOGLE_SERVICES_VERSION + "'",
+            top,
+            count=1,
+        )
+        with open(top_path, "w") as f:
+            f.write(top)
+
+    if "com.google.gms.google-services" not in app:
+        app += "\napply plugin: 'com.google.gms.google-services'\n"
+        with open(app_path, "w") as f:
+            f.write(app)
+
+print("google-services plugin aplicado correctamente.")
