@@ -24,14 +24,13 @@ if modern:
     print("Detectado formato moderno de Gradle (plugins en settings.gradle).")
 
     if "com.google.gms.google-services" not in settings:
-        for needle in ['id "com.android.application"', "id 'com.android.application'"]:
-            if needle in settings:
-                settings = settings.replace(
-                    needle,
-                    needle + f'\n    id "com.google.gms.google-services" version "{GOOGLE_SERVICES_VERSION}" apply false',
-                    1,
-                )
-                break
+        import re
+        pattern = r'((?:id\s+["\']com\.android\.application["\'][^\n]*\n))'
+        replacement = r'\1    id "com.google.gms.google-services" version "' + GOOGLE_SERVICES_VERSION + '" apply false\n'
+        new_settings, count = re.subn(pattern, replacement, settings, count=1)
+        if count == 0:
+            raise SystemExit("No se encontró la línea de com.android.application en settings.gradle")
+        settings = new_settings
         with open(settings_path, "w") as f:
             f.write(settings)
 
