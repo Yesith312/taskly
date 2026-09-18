@@ -15,7 +15,6 @@ if "keystoreProperties" in content:
     print("build.gradle ya está parchado, no se toca de nuevo.")
     sys.exit(0)
 
-# 1. Cargar key.properties (contraseñas/alias) antes del bloque android {
 loader = '''def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
 if (keystorePropertiesFile.exists()) {
@@ -25,7 +24,6 @@ if (keystorePropertiesFile.exists()) {
 '''
 content = content.replace("android {", loader + "android {", 1)
 
-# 2. Insertar signingConfigs.release dentro del bloque android { ... }
 signing_config = '''
     signingConfigs {
         release {
@@ -38,11 +36,21 @@ signing_config = '''
 '''
 content = re.sub(r"(android\s*\{)", r"\1" + signing_config, content, count=1)
 
-# 3. Apuntar el buildType release a nuestro signingConfig
-content = content.replace(
-    "signingConfig signingConfigs.debug",
+new_content, n = re.subn(
+    r"signingConfig\s*=?\s*signingConfigs\.debug",
     "signingConfig signingConfigs.release",
+    content,
 )
+
+if n == 0:
+    print("ERROR: no se encontró 'signingConfig ... signingConfigs.debug' en build.gradle.")
+    print("Esto significa que el APK release NO se firmaría con nuestro keystore.")
+    print("--- Contenido actual de build.gradle para depurar ---")
+    print(content)
+    sys.exit(1)
+
+content = new_content
+print(f"Reemplazos de signingConfig aplicados: {n}")
 
 with open(path, "w") as f:
     f.write(content)
