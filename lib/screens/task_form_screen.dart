@@ -23,6 +23,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   late TaskCategory _category;
   late int _notifyDaysBefore;
   late TimeOfDay _notifyTime;
+  bool _saving = false;
 
   bool get _isEditing => widget.existingTask != null;
 
@@ -60,43 +61,100 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     if (picked != null) setState(() => _notifyTime = picked);
   }
 
+  /// true = el usuario confirmó que quiere guardar igual; false = se
+  /// canceló para corregir la fecha/hora.
+  Future<bool> _confirmIfPastOrNoReminder(TaskModel candidate) async {
+    final now = DateTime.now();
+    final dueDateOnly = DateTime(_dueDate.year, _dueDate.month, _dueDate.day);
+    final todayOnly = DateTime(now.year, now.month, now.day);
+    final isPastDueDate = dueDateOnly.isBefore(todayOnly);
+
+    final notificationService = context.read<NotificationService>();
+    final reminderWontFire = notificationService.reminderAlreadyPassed(candidate);
+
+    if (!isPastDueDate && !reminderWontFire) return true; // todo normal, no hay nada que avisar
+
+    if (!mounted) return true;
+
+    final message = isPastDueDate
+        ? 'La fecha de esta tarea ya pasó. Se va a guardar igual, pero no vas a recibir ninguna notificación de aviso.'
+        : 'Con la fecha y hora de aviso que elegiste, el recordatorio ya no alcanza a llegar a tiempo (ya pasó). Se va a guardar igual, pero no vas a recibir ese aviso.';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Aviso'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Corregir fecha/hora'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Guardar igual'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
   Future<void> _save() async {
+    if (_titleController.text.trim().isEmpty) return;
+    if (_saving) return;
+
     final taskService = context.read<TaskService>();
     final notificationService = context.read<NotificationService>();
     final userId = context.read<AuthService>().currentUser!.uid;
 
-    if (_titleController.text.trim().isEmpty) return;
+    // Se arma la tarea candidata primero (sin guardar todavía) para
+    // poder chequear la fecha/hora de aviso antes de escribir nada.
+    final candidate = (widget.existingTask ?? TaskModel(
+      id: '',
+      ownerId: userId,
+      title: '',
+      description: '',
+      dueDate: _dueDate,
+      category: _category,
+    )).copyWith(
+      title: _titleController.text.trim(),
+      description: _descriptionController.text.trim(),
+      dueDate: _dueDate,
+      category: _category,
+      notifyDaysBefore: _notifyDaysBefore,
+      notifyHour: _notifyTime.hour,
+      notifyMinute: _notifyTime.minute,
+    );
 
-    if (_isEditing) {
-      final updated = widget.existingTask!.copyWith(
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        dueDate: _dueDate,
-        category: _category,
-        notifyDaysBefore: _notifyDaysBefore,
-        notifyHour: _notifyTime.hour,
-        notifyMinute: _notifyTime.minute,
-      );
-      await taskService.updateTask(updated);
-      await notificationService.scheduleForTask(updated);
-    } else {
-      final newTask = TaskModel(
-        id: '', // Firestore le asigna el id real al crearla
-        ownerId: userId,
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        dueDate: _dueDate,
-        category: _category,
-        notifyDaysBefore: _notifyDaysBefore,
-        notifyHour: _notifyTime.hour,
-        notifyMinute: _notifyTime.minute,
-      );
-      final id = await taskService.createTask(newTask);
-      final savedTask = TaskModel.fromMap(id, newTask.toMap());
-      await notificationService.scheduleForTask(savedTask);
+    final shouldContinue = await _confirmIfPastOrNoReminder(candidate);
+    if (!shouldContinue) return;
+    if (!mounted) return;
+
+    setState(() => _saving = true);
+
+    try {
+      if (_isEditing) {
+        await taskService.updateTask(candidate);
+        await notificationService.scheduleForTask(candidate);
+      } else {
+        final id = await taskService.createTask(candidate);
+        final savedTask = TaskModel.fromMap(id, candidate.toMap());
+        await notificationService.scheduleForTask(savedTask);
+      }
+
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      // Si algo falla guardando en Firestore (sin internet y sin caché
+      // local todavía, por ejemplo), avisamos en vez de quedarnos
+      // pegados en esta pantalla sin explicación.
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo guardar: $e')),
+        );
+      }
     }
-
-    if (mounted) Navigator.of(context).pop();
   }
 
   Future<void> _delete() async {
@@ -186,7 +244,16 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
             onTap: _pickTime,
           ),
           const SizedBox(height: 24),
-          FilledButton(onPressed: _save, child: Text(t.save)),
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            child: _saving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(t.save),
+          ),
         ],
       ),
     );

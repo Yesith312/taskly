@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
@@ -48,9 +49,71 @@ class NotificationService {
   int _nudgeId(String taskId) => (taskId.hashCode ^ 0x5a5a5a5a) & 0x7fffffff;
 
   Future<void> scheduleForTask(TaskModel task) async {
-    await cancelForTask(task.id);
-    if (task.isDone) return; // no se avisa nada de una tarea ya hecha
+    try {
+      await cancelForTask(task.id);
+      if (task.isDone) return; // no se avisa nada de una tarea ya hecha
 
+      final reminderDate = task.dueDate.subtract(
+        Duration(days: task.notifyDaysBefore),
+      );
+      final reminderDateTime = DateTime(
+        reminderDate.year,
+        reminderDate.month,
+        reminderDate.day,
+        task.notifyHour,
+        task.notifyMinute,
+      );
+
+      if (reminderDateTime.isAfter(DateTime.now())) {
+        await _plugin.zonedSchedule(
+          _reminderId(task.id),
+          task.title,
+          'Vence el ${_formatDate(task.dueDate)}',
+          tz.TZDateTime.from(reminderDateTime, tz.local),
+          _details(),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+      }
+
+      // Recordatorio semanal: empieza justo el día de la entrega, a la
+      // misma hora configurada, y se repite cada 7 días. Se cancela solo
+      // (con cancelForTask) en cuanto la tarea se marca como hecha.
+      final nudgeStart = DateTime(
+        task.dueDate.year,
+        task.dueDate.month,
+        task.dueDate.day,
+        task.notifyHour,
+        task.notifyMinute,
+      );
+
+      await _plugin.zonedSchedule(
+        _nudgeId(task.id),
+        task.title,
+        'No marcaste esta tarea como hecha',
+        tz.TZDateTime.from(nudgeStart, tz.local),
+        _details(),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+      );
+    } catch (e, st) {
+      // Nunca dejamos que un error programando una notificación bloquee
+      // el resto de la app (crear/editar tareas debe seguir funcionando
+      // aunque, por ejemplo, el celular haya negado el permiso de
+      // alarmas exactas).
+      debugPrint('No se pudo programar la notificación de "${task.title}": $e\n$st');
+    }
+  }
+
+  /// Devuelve true si, con la configuración actual de la tarea, el
+  /// aviso "X días antes" ya no alcanza a dispararse (porque esa fecha
+  /// y hora ya pasaron). Se usa para avisarle al usuario en el
+  /// formulario, antes de guardar, en vez de dejarlo sin ningún aviso
+  /// y sin explicación.
+  bool reminderAlreadyPassed(TaskModel task) {
     final reminderDate = task.dueDate.subtract(
       Duration(days: task.notifyDaysBefore),
     );
@@ -61,42 +124,7 @@ class NotificationService {
       task.notifyHour,
       task.notifyMinute,
     );
-
-    if (reminderDateTime.isAfter(DateTime.now())) {
-      await _plugin.zonedSchedule(
-        _reminderId(task.id),
-        task.title,
-        'Vence el ${_formatDate(task.dueDate)}',
-        tz.TZDateTime.from(reminderDateTime, tz.local),
-        _details(),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
-    }
-
-    // Recordatorio semanal: empieza justo el día de la entrega, a la
-    // misma hora configurada, y se repite cada 7 días. Se cancela solo
-    // (con cancelForTask) en cuanto la tarea se marca como hecha.
-    final nudgeStart = DateTime(
-      task.dueDate.year,
-      task.dueDate.month,
-      task.dueDate.day,
-      task.notifyHour,
-      task.notifyMinute,
-    );
-
-    await _plugin.zonedSchedule(
-      _nudgeId(task.id),
-      task.title,
-      'No marcaste esta tarea como hecha',
-      tz.TZDateTime.from(nudgeStart, tz.local),
-      _details(),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-    );
+    return !reminderDateTime.isAfter(DateTime.now());
   }
 
   Future<void> cancelForTask(String taskId) async {

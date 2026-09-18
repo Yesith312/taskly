@@ -12,7 +12,20 @@
           "package_name": "com.taskly.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "258701878505-h81vqduiirlfff4bssl3n1v8q8rcdk9k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.taskly.app",
+            "certificate_hash": "4ff4e8d1aff73961abbdf15514c6f89c818ba0eb"
+          }
+        },
+        {
+          "client_id": "258701878505-6cse13eo9bg0r7qigova0rclnpqoirbe.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDpVThAIh1ZHrR7RpyEIWyjyH4GuW4W-i8"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "258701878505-6cse13eo9bg0r7qigova0rclnpqoirbe.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

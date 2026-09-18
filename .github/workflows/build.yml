@@ -1,5 +1,7 @@
 name: Build Taskly APK
 
+# Se ejecuta cada vez que subes código a la rama "main", o manualmente
+# desde la pestaña "Actions" de GitHub con el botón "Run workflow".
 on:
   push:
     branches: [main]
@@ -9,6 +11,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Estos valores se leen de: Settings -> Secrets and variables ->
+    # Actions -> "New repository secret". Ver README.md, sección
+    # "Configurar con GitHub Actions (sin Termux)" para la lista exacta
+    # y de dónde sacar cada uno.
     env:
       FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
       FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
@@ -34,11 +40,19 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
+      # Aquí es donde pasa la magia que en Termux fallaba: como esta
+      # máquina de GitHub sí corre Linux normal (no Android/Bionic),
+      # `flutter create` y todo lo demás funciona sin el error de TLS
+      # que te salió en Termux.
       - name: Generar android/ y aplicar configuración (widget, Firebase)
         run: |
           chmod +x .github/scripts/prepare_android.sh
           .github/scripts/prepare_android.sh
 
+      # El keystore no se sube al repo (es una clave privada). Se guarda
+      # como GitHub Secret en base64 y aquí se reconstruye el archivo
+      # real, siempre igual en cada build, para que el SHA-1 del APK
+      # nunca cambie (si cambiara, Google Sign-In dejaría de funcionar).
       - name: Reconstruir el keystore y key.properties
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/taskly-release.keystore
@@ -53,6 +67,9 @@ jobs:
           echo "El keystore existe?"
           ls -la android/taskly-release.keystore
 
+      # Necesario para que google_sign_in encuentre el cliente OAuth de
+      # Android automáticamente. Igual que el keystore, no se sube tal
+      # cual al repo: se guarda en base64 como secret y se reconstruye aquí.
       - name: Reconstruir google-services.json
         run: |
           echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
@@ -71,6 +88,9 @@ jobs:
       - name: Compilar el APK
         run: flutter build apk --release
 
+      # El APK queda guardado como "artifact" del workflow: se descarga
+      # desde GitHub, pestaña "Actions" -> el run correspondiente ->
+      # sección "Artifacts" al final de la página.
       - name: Subir el APK como artifact
         uses: actions/upload-artifact@v4
         with:
