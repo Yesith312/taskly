@@ -50,6 +50,9 @@ fi
 echo "== 4. Configurando la firma del APK (para que el SHA-1 no cambie nunca) =="
 python3 .github/scripts/patch_signing.py
 
+echo "== 4.1 Aplicando el plugin de Google Services (necesario para Google Sign-In) =="
+python3 .github/scripts/patch_google_services.py
+
 echo "== 5. Rellenando lib/firebase_options.dart con las claves de Firebase =="
 sed -i \
   -e "s/REEMPLAZA_CON_TU_API_KEY/${FIREBASE_API_KEY}/g" \
@@ -59,5 +62,4 @@ sed -i \
   lib/firebase_options.dart
 
 echo "== Listo, carpeta android/ configurada =="
-
 

@@ -58,6 +58,7 @@ ser idéntico, en mayúsculas):
 | `KEYSTORE_PASSWORD`       | La contraseña que pusiste al crear el keystore|
 | `KEY_ALIAS`               | `taskly` (o el alias que hayas usado)         |
 | `KEY_PASSWORD`            | La contraseña de la key (puede ser la misma)  |
+| `GOOGLE_SERVICES_JSON_BASE64` | Ver sección "google-services.json" abajo  |
 
 No hace falta tocar ningún archivo del proyecto a mano: el workflow
 (`.github/workflows/build.yml`) toma estos secrets y arma todo solo
@@ -94,6 +95,20 @@ Copia TODO ese texto larguísimo y pégalo como el secret
 `KEYSTORE_BASE64` en GitHub. Guarda también `taskly-release.keystore`
 en un lugar seguro de tu celular — si lo pierdes, no vas a poder volver
 a firmar la app igual, y tocaría empezar de cero con un SHA-1 nuevo.
+
+## 3.2 google-services.json (necesario para que funcione Google Sign-In)
+
+1. En Firebase Console → **Project settings** → pestaña **General** →
+   "Your apps" → tu app Android → busca el link de descarga
+   **"google-services.json"** y descárgalo al celular.
+2. Muévelo (o cópialo) a la misma carpeta donde tienes el proyecto en
+   Termux, y conviértelo a base64:
+   ```bash
+   base64 -w 0 google-services.json > google_services_base64.txt
+   cat google_services_base64.txt
+   ```
+3. Copia ese texto y pégalo como el secret `GOOGLE_SERVICES_JSON_BASE64`
+   en GitHub (mismo lugar que los demás secrets).
 
 ## 4. Compilar
 
