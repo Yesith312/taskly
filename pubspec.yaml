@@ -58,7 +58,7 @@ flutter:
 # Se corre con: flutter pub run flutter_launcher_icons
 flutter_launcher_icons:
   android: true
-  ios: true
+  ios: false
   image_path: "assets/images/app-icon.png"
 
 # Genera la pantalla de splash nativa (la que se ve antes de que
@@ -69,6 +69,8 @@ flutter_native_splash:
   color: "#FFFFFF"
   image_dark: assets/images/splash-dark.png
   color_dark: "#4C5FD5"
+  android: true
+  ios: false
   android_12:
     image: assets/images/splash-light.png
     color: "#FFFFFF"
