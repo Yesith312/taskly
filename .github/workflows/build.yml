@@ -1,0 +1,82 @@
+name: Build Taskly APK
+
+# Se ejecuta cada vez que subes código a la rama "main", o manualmente
+# desde la pestaña "Actions" de GitHub con el botón "Run workflow".
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    # Estos valores se leen de: Settings -> Secrets and variables ->
+    # Actions -> "New repository secret". Ver README.md, sección
+    # "Configurar con GitHub Actions (sin Termux)" para la lista exacta
+    # y de dónde sacar cada uno.
+    env:
+      FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+      FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+      FIREBASE_SENDER_ID: ${{ secrets.FIREBASE_SENDER_ID }}
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+    steps:
+      - name: Descargar el código del repo
+        uses: actions/checkout@v4
+
+      - name: Instalar Java (lo necesita Android/Gradle)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Instalar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      # Aquí es donde pasa la magia que en Termux fallaba: como esta
+      # máquina de GitHub sí corre Linux normal (no Android/Bionic),
+      # `flutter create` y todo lo demás funciona sin el error de TLS
+      # que te salió en Termux.
+      - name: Generar android/ y aplicar configuración (widget, Firebase)
+        run: |
+          chmod +x .github/scripts/prepare_android.sh
+          .github/scripts/prepare_android.sh
+
+      # El keystore no se sube al repo (es una clave privada). Se guarda
+      # como GitHub Secret en base64 y aquí se reconstruye el archivo
+      # real, siempre igual en cada build, para que el SHA-1 del APK
+      # nunca cambie (si cambiara, Google Sign-In dejaría de funcionar).
+      - name: Reconstruir el keystore y key.properties
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/taskly-release.keystore
+          cat > android/key.properties <<EOF
+          storePassword=${KEYSTORE_PASSWORD}
+          keyPassword=${KEY_PASSWORD}
+          keyAlias=${KEY_ALIAS}
+          storeFile=../taskly-release.keystore
+          EOF
+
+      - name: Instalar dependencias del proyecto
+        run: flutter pub get
+
+      - name: Generar archivos de idiomas (l10n)
+        run: flutter gen-l10n
+
+      - name: Compilar el APK
+        run: flutter build apk --release
+
+      # El APK queda guardado como "artifact" del workflow: se descarga
+      # desde GitHub, pestaña "Actions" -> el run correspondiente ->
+      # sección "Artifacts" al final de la página.
+      - name: Subir el APK como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskly-apk
+          path: build/app/outputs/flutter-apk/app-release.apk

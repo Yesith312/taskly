@@ -1,0 +1,19 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Cada usuario solo puede leer, crear, editar y borrar SUS PROPIAS
+    // tareas (comparando el ownerId del documento con su uid de Firebase Auth).
+    match /tasks/{taskId} {
+      allow read, delete: if request.auth != null
+                           && resource.data.ownerId == request.auth.uid;
+
+      allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid;
+
+      allow update: if request.auth != null
+                    && resource.data.ownerId == request.auth.uid
+                    && request.resource.data.ownerId == request.auth.uid;
+    }
+  }
+}
