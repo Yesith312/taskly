@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Este script lo corre GitHub Actions (no tienes que ejecutarlo tú a mano).
-# Arma todo lo que en Termux hubieras tenido que copiar/pegar manualmente:
-#  - genera android/ con `flutter create`
-#  - copia los archivos del widget nativo
-#  - registra el widget en AndroidManifest.xml
-#  - rellena lib/firebase_options.dart con las claves de Firebase (desde Secrets)
 set -euo pipefail
 
 echo "== 1. Generando carpeta android/ (si falta) =="
@@ -53,6 +47,10 @@ python3 .github/scripts/patch_signing.py
 echo "== 4.1 Aplicando el plugin de Google Services (necesario para Google Sign-In) =="
 python3 .github/scripts/patch_google_services.py
 
+echo "== 4.2 Actualizando la versión de Kotlin (algunos plugins la necesitan más nueva) =="
+sed -i -E 's/(id "org\.jetbrains\.kotlin\.android" version )"[^"]+"/\1"1.9.22"/' android/settings.gradle
+sed -i -E "s/(id 'org\.jetbrains\.kotlin\.android' version )'[^']+'/\1'1.9.22'/" android/settings.gradle
+
 echo "== 5. Rellenando lib/firebase_options.dart con las claves de Firebase =="
 sed -i \
   -e "s/REEMPLAZA_CON_TU_API_KEY/${FIREBASE_API_KEY}/g" \
@@ -62,4 +60,3 @@ sed -i \
   lib/firebase_options.dart
 
 echo "== Listo, carpeta android/ configurada =="
-

@@ -73,7 +73,7 @@ class TasklyApp extends StatelessWidget {
       colorSchemeSeed: seed,
       brightness: Brightness.light,
       appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
-      cardTheme: CardThemeData(
+      cardTheme: CardTheme(
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
