@@ -4,7 +4,14 @@ set -euo pipefail
 echo "== 1. Generando carpeta android/ =="
 flutter create --platforms=android --org com.taskly --project-name app .
 
-echo "== 1.1 Configurando minSdk = 23 =="
+echo "== 1.1 Configurando nombre de la aplicación: Taskly =="
+
+sed -i 's/android:label="app"/android:label="Taskly"/' \
+  android/app/src/main/AndroidManifest.xml
+
+echo "✓ Nombre configurado como Taskly"
+
+echo "== 1.2 Configurando minSdk = 23 =="
 
 python3 - <<'PY'
 from pathlib import Path
