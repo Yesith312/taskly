@@ -1,7 +1,7 @@
 name: Build Taskly APK
 
-# Se ejecuta cada vez que subes código a la rama "main", o manualmente
-# desde la pestaña "Actions" de GitHub con el botón "Run workflow".
+# Se ejecuta cada vez que subes código a la rama "main",
+# o manualmente desde GitHub Actions.
 on:
   push:
     branches: [main]
@@ -11,10 +11,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    # Estos valores se leen de: Settings -> Secrets and variables ->
-    # Actions -> "New repository secret". Ver README.md, sección
-    # "Configurar con GitHub Actions (sin Termux)" para la lista exacta
-    # y de dónde sacar cada uno.
     env:
       FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
       FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
@@ -25,37 +21,49 @@ jobs:
       KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
     steps:
+
+      # =========================================================
+      # 1. Descargar código
+      # =========================================================
       - name: Descargar el código del repo
         uses: actions/checkout@v4
 
-      - name: Instalar Java (lo necesita Android/Gradle)
+      # =========================================================
+      # 2. Java
+      # =========================================================
+      - name: Instalar Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
+      # =========================================================
+      # 3. Flutter
+      # =========================================================
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.0'
           channel: 'stable'
 
-      # Aquí es donde pasa la magia que en Termux fallaba: como esta
-      # máquina de GitHub sí corre Linux normal (no Android/Bionic),
-      # `flutter create` y todo lo demás funciona sin el error de TLS
-      # que te salió en Termux.
-      - name: Generar android/ y aplicar configuración (widget, Firebase)
+      # =========================================================
+      # 4. Generar carpeta android/
+      # =========================================================
+      - name: Generar android y aplicar configuración
         run: |
           chmod +x .github/scripts/prepare_android.sh
           .github/scripts/prepare_android.sh
 
-      # El keystore no se sube al repo (es una clave privada). Se guarda
-      # como GitHub Secret en base64 y aquí se reconstruye el archivo
-      # real, siempre igual en cada build, para que el SHA-1 del APK
-      # nunca cambie (si cambiara, Google Sign-In dejaría de funcionar).
+      # =========================================================
+      # 5. Reconstruir keystore
+      # =========================================================
+      # El keystore se guarda en GitHub Secrets como Base64.
+      # Se reconstruye aquí para firmar el APK.
+      # =========================================================
       - name: Reconstruir el keystore y key.properties
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/taskly-release.keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/taskly-release.keystore
+
           cat > android/key.properties <<EOF
           storePassword=${KEYSTORE_PASSWORD}
           keyPassword=${KEY_PASSWORD}
@@ -63,30 +71,67 @@ jobs:
           storeFile=../taskly-release.keystore
           EOF
 
-      # Necesario para que google_sign_in encuentre el cliente OAuth de
-      # Android automáticamente. Igual que el keystore, no se sube tal
-      # cual al repo: se guarda en base64 como secret y se reconstruye aquí.
-      - name: Reconstruir google-services.json
+      # =========================================================
+      # 6. Reconstruir Firebase
+      # =========================================================
+      # El archivo se mantiene conceptualmente en:
+      #
+      # taskly/google-services.json
+      #
+      # y luego se copia a:
+      #
+      # taskly/android/app/google-services.json
+      #
+      # porque Gradle necesita encontrarlo ahí.
+      # =========================================================
+      - name: Reconstruir y validar google-services.json
         run: |
-          echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
+          echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > google-services.json
 
+          echo "Validando google-services.json..."
+
+          python3 -m json.tool google-services.json > /dev/null
+
+          echo "✓ google-services.json es un JSON válido"
+
+          mkdir -p android/app
+
+          cp google-services.json android/app/google-services.json
+
+          echo "✓ google-services.json copiado correctamente"
+
+      # =========================================================
+      # 7. Instalar dependencias
+      # =========================================================
       - name: Instalar dependencias del proyecto
-        run: flutter pub get
+        run: |
+          flutter pub get
 
-      - name: Generar ícono de la app y splash screen desde tus imágenes
+      # =========================================================
+      # 8. Generar iconos y splash
+      # =========================================================
+      - name: Generar ícono y splash screen
         run: |
           dart run flutter_launcher_icons
           dart run flutter_native_splash:create
 
-      - name: Generar archivos de idiomas (l10n)
-        run: flutter gen-l10n
+      # =========================================================
+      # 9. Generar idiomas
+      # =========================================================
+      - name: Generar archivos de idiomas
+        run: |
+          flutter gen-l10n
 
+      # =========================================================
+      # 10. Compilar APK
+      # =========================================================
       - name: Compilar el APK
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release
 
-      # El APK queda guardado como "artifact" del workflow: se descarga
-      # desde GitHub, pestaña "Actions" -> el run correspondiente ->
-      # sección "Artifacts" al final de la página.
+      # =========================================================
+      # 11. Subir APK
+      # =========================================================
       - name: Subir el APK como artifact
         uses: actions/upload-artifact@v4
         with:
