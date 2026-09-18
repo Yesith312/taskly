@@ -73,6 +73,11 @@ jobs:
       - name: Instalar dependencias del proyecto
         run: flutter pub get
 
+      - name: Generar ícono de la app y splash screen desde tus imágenes
+        run: |
+          dart run flutter_launcher_icons
+          dart run flutter_native_splash:create
+
       - name: Generar archivos de idiomas (l10n)
         run: flutter gen-l10n
 

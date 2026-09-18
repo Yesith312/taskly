@@ -25,6 +25,9 @@ if modern:
 
     if "com.google.gms.google-services" not in settings:
         import re
+        # Busca la línea COMPLETA del plugin de Android (con su versión y
+        # "apply false" incluidos) y agrega la nuestra justo después,
+        # sin cortar nada a la mitad.
         pattern = r'((?:id\s+["\']com\.android\.application["\'][^\n]*\n))'
         replacement = r'\1    id "com.google.gms.google-services" version "' + GOOGLE_SERVICES_VERSION + '" apply false\n'
         new_settings, count = re.subn(pattern, replacement, settings, count=1)

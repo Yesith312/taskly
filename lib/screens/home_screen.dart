@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../models/task.dart';
@@ -86,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const Divider(height: 1),
               Expanded(
                 child: tasksForSelectedDay.isEmpty
-                    ? Center(child: Text(t.noTasksToday))
+                    ? _EmptyState(message: t.noTasksToday)
                     : ListView.builder(
                         padding: const EdgeInsets.all(12),
                         itemCount: tasksForSelectedDay.length,
@@ -116,14 +117,49 @@ class _HomeScreenState extends State<HomeScreen> {
       a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
+class _EmptyState extends StatelessWidget {
+  final String message;
+  const _EmptyState({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/images/sin-tareas.png', width: 200),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TaskCard extends StatelessWidget {
   final TaskModel task;
   const _TaskCard({required this.task});
+
+  String _statusIcon() {
+    if (task.isDone) return 'assets/icons/hecho.svg';
+    final isOverdue = task.dueDate.isBefore(DateTime.now());
+    return isOverdue ? 'assets/icons/atrasado.svg' : 'assets/icons/pendiente.svg';
+  }
 
   @override
   Widget build(BuildContext context) {
     final taskService = context.read<TaskService>();
     final t = AppLocalizations.of(context)!;
+    final categoryIcon = task.category == TaskCategory.school
+        ? 'assets/icons/colegio.svg'
+        : 'assets/icons/trabajo.svg';
     final categoryLabel = task.category == TaskCategory.school ? t.school : t.work;
 
     return Card(
@@ -131,9 +167,13 @@ class _TaskCard extends StatelessWidget {
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => TaskFormScreen(existingTask: task)),
         ),
-        leading: Checkbox(
-          value: task.isDone,
-          onChanged: (value) => taskService.setDone(task.id, value ?? false),
+        leading: SizedBox(
+          width: 28,
+          height: 28,
+          child: GestureDetector(
+            onTap: () => taskService.setDone(task.id, !task.isDone),
+            child: SvgPicture.asset(_statusIcon()),
+          ),
         ),
         title: Text(
           task.title,
@@ -141,10 +181,18 @@ class _TaskCard extends StatelessWidget {
             decoration: task.isDone ? TextDecoration.lineThrough : null,
           ),
         ),
-        subtitle: Text(categoryLabel),
-        trailing: task.isDone
-            ? const Icon(Icons.check_circle, color: Colors.green)
-            : null,
+        subtitle: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: SvgPicture.asset(categoryIcon),
+            ),
+            const SizedBox(width: 6),
+            Text(categoryLabel),
+          ],
+        ),
       ),
     );
   }
