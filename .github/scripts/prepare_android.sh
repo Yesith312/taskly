@@ -1,36 +1,118 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
 
+echo "=========================================="
+echo " TASKLY - PREPARACIÓN ANDROID"
+echo "=========================================="
+
+# ============================================================
+# 1. Generar carpeta android/
+# ============================================================
+
+echo ""
 echo "== 1. Generando carpeta android/ =="
-flutter create --platforms=android --org com.taskly --project-name app .
 
-echo "== 1.1 Configurando nombre de la aplicación: Taskly =="
+flutter create \
+  --platforms=android \
+  --org com.taskly \
+  --project-name app \
+  .
 
-sed -i 's/android:label="app"/android:label="Taskly"/' \
-  android/app/src/main/AndroidManifest.xml
+echo "✓ Carpeta android/ generada"
 
-echo "✓ Nombre configurado como Taskly"
 
-echo "== 1.2 Configurando minSdk = 23 =="
+# ============================================================
+# 2. Configurar nombre, minSdk e INTERNET
+# ============================================================
+
+echo ""
+echo "== 2. Configurando AndroidManifest.xml =="
+
+python3 - <<'PY'
+from pathlib import Path
+
+path = Path("android/app/src/main/AndroidManifest.xml")
+content = path.read_text()
+
+# ------------------------------------------------------------
+# Nombre visible de la aplicación
+# ------------------------------------------------------------
+
+content = content.replace(
+    'android:label="app"',
+    'android:label="Taskly"'
+)
+
+# Por si Flutter hubiera generado otro label
+content = content.replace(
+    'android:label="@string/app_name"',
+    'android:label="Taskly"'
+)
+
+# ------------------------------------------------------------
+# Permiso INTERNET
+# Necesario para Firebase / Google Sign-In
+# ------------------------------------------------------------
+
+permission = '<uses-permission android:name="android.permission.INTERNET" />'
+
+if permission not in content:
+    content = content.replace(
+        '<application',
+        permission + '\n\n    <application',
+        1
+    )
+
+path.write_text(content)
+
+print("✓ Nombre: Taskly")
+print("✓ INTERNET configurado")
+PY
+
+
+# ============================================================
+# 3. Configurar minSdk = 23
+# ============================================================
+
+echo ""
+echo "== 3. Configurando minSdk = 23 =="
 
 python3 - <<'PY'
 from pathlib import Path
 
 path = Path("android/app/build.gradle")
-text = path.read_text()
-original = text
+content = path.read_text()
 
-text = text.replace("minSdk = flutter.minSdkVersion", "minSdk = 23")
-text = text.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 23")
+original = content
 
-if text == original:
-    print("⚠️ No se encontró la configuración de minSdk de Flutter.")
+# Flutter 3.24 normalmente genera esto:
+content = content.replace(
+    "minSdk = flutter.minSdkVersion",
+    "minSdk = 23"
+)
+
+# Compatibilidad con formato antiguo:
+content = content.replace(
+    "minSdkVersion flutter.minSdkVersion",
+    "minSdkVersion 23"
+)
+
+if content == original:
+    print("⚠️ No se encontró minSdk de Flutter.")
+    print("Revisa android/app/build.gradle")
 else:
-    path.write_text(text)
-    print("✓ minSdk configurado en 23")
+    path.write_text(content)
+    print("✓ minSdk = 23")
 PY
 
-echo "== 2. Copiando archivos nativos del widget =="
+
+# ============================================================
+# 4. Copiar archivos del widget
+# ============================================================
+
+echo ""
+echo "== 4. Configurando widget Android =="
 
 mkdir -p android/app/src/main/kotlin/com/taskly/app
 mkdir -p android/app/src/main/res/layout
@@ -45,51 +127,119 @@ cp android_widget_files/res/layout/taskly_widget.xml \
 cp android_widget_files/res/xml/taskly_widget_info.xml \
    android/app/src/main/res/xml/taskly_widget_info.xml
 
-echo "== 3. Registrando el widget en AndroidManifest.xml =="
+echo "✓ Archivos del widget copiados"
+
+
+# ============================================================
+# 5. Registrar widget en AndroidManifest
+# ============================================================
+
+echo ""
+echo "== 5. Registrando widget en AndroidManifest.xml =="
 
 MANIFEST="android/app/src/main/AndroidManifest.xml"
 
 if ! grep -q "TasklyWidgetProvider" "$MANIFEST"; then
-  python3 - "$MANIFEST" <<'PY'
+
+    python3 - "$MANIFEST" <<'PY'
 import sys
 
 path = sys.argv[1]
 
-with open(path) as f:
+with open(path, encoding="utf-8") as f:
     content = f.read()
 
 receiver = '''
-        <receiver android:name=".TasklyWidgetProvider" android:exported="false">
+        <receiver
+            android:name=".TasklyWidgetProvider"
+            android:exported="false">
+
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
+
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/taskly_widget_info" />
+
         </receiver>
 '''
 
-content = content.replace("</application>", receiver + "    </application>")
+if "</application>" not in content:
+    raise SystemExit(
+        "❌ No se encontró </application> en AndroidManifest.xml"
+    )
 
-with open(path, "w") as f:
+content = content.replace(
+    "</application>",
+    receiver + "\n    </application>",
+    1
+)
+
+with open(path, "w", encoding="utf-8") as f:
     f.write(content)
+
+print("✓ Widget registrado")
 PY
+
+else
+    echo "✓ Widget ya estaba registrado"
 fi
 
-echo "== 4. Configurando la firma del APK =="
+
+# ============================================================
+# 6. Configurar firma Release
+# ============================================================
+
+echo ""
+echo "== 6. Configurando firma Release =="
 
 python3 .github/scripts/patch_signing.py
 
-echo "== 4.1 Aplicando Google Services =="
+echo "✓ Firma configurada"
+
+
+# ============================================================
+# 7. Configurar Google Services
+# ============================================================
+
+echo ""
+echo "== 7. Configurando Google Services =="
 
 python3 .github/scripts/patch_google_services.py
 
-echo "== 4.2 Actualizando Kotlin =="
+echo "✓ Google Services configurado"
 
-sed -i -E 's/(id "org\.jetbrains\.kotlin\.android" version )"[^"]+"/\1"1.9.22"/' android/settings.gradle
-sed -i -E "s/(id 'org\.jetbrains\.kotlin\.android' version )'[^']+'/\1'1.9.22'/" android/settings.gradle
 
-echo "== 5. Configurando Firebase =="
+# ============================================================
+# 8. Actualizar Kotlin
+# ============================================================
+
+echo ""
+echo "== 8. Actualizando Kotlin a 1.9.22 =="
+
+sed -i -E \
+  's/(id "org\.jetbrains\.kotlin\.android" version )"[^"]+"/\1"1.9.22"/' \
+  android/settings.gradle
+
+sed -i -E \
+  "s/(id 'org\.jetbrains\.kotlin\.android' version )'[^']+'/\\1'1.9.22'/" \
+  android/settings.gradle
+
+echo "✓ Kotlin configurado"
+
+
+# ============================================================
+# 9. Configurar Firebase options
+# ============================================================
+
+echo ""
+echo "== 9. Configurando Firebase =="
+
+if [ ! -f "lib/firebase_options.dart" ]; then
+    echo "❌ No existe lib/firebase_options.dart"
+    exit 1
+fi
 
 sed -i \
   -e "s/REEMPLAZA_CON_TU_API_KEY/${FIREBASE_API_KEY}/g" \
@@ -98,8 +248,41 @@ sed -i \
   -e "s/REEMPLAZA_CON_TU_PROJECT_ID/${FIREBASE_PROJECT_ID}/g" \
   lib/firebase_options.dart
 
-echo "== Verificación minSdk =="
+echo "✓ Firebase configurado"
 
+
+# ============================================================
+# 10. Mostrar configuración final
+# ============================================================
+
+echo ""
+echo "=========================================="
+echo " CONFIGURACIÓN FINAL"
+echo "=========================================="
+
+echo ""
+echo "Application ID:"
+grep -n "applicationId" android/app/build.gradle || true
+
+echo ""
+echo "minSdk:"
 grep -n "minSdk" android/app/build.gradle || true
 
-echo "== Listo =="
+echo ""
+echo "Nombre:"
+grep -n 'android:label' android/app/src/main/AndroidManifest.xml || true
+
+echo ""
+echo "INTERNET:"
+grep -n "android.permission.INTERNET" \
+  android/app/src/main/AndroidManifest.xml || true
+
+echo ""
+echo "Widget:"
+grep -n "TasklyWidgetProvider" \
+  android/app/src/main/AndroidManifest.xml || true
+
+echo ""
+echo "=========================================="
+echo " ✓ ANDROID CONFIGURADO CORRECTAMENTE"
+echo "=========================================="
