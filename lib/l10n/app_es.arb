@@ -29,5 +29,25 @@
   "overdueReminder": "No marcaste esta tarea como hecha",
   "cancel": "Cancelar",
   "confirmDeleteTitle": "¿Eliminar tarea?",
-  "confirmDeleteBody": "Esta acción no se puede deshacer."
+  "confirmDeleteBody": "Esta acción no se puede deshacer.",
+  "warningTitle": "Aviso",
+  "taskDatePassedMessage": "La fecha de esta tarea ya pasó. Se va a guardar igual, pero no vas a recibir ninguna notificación de aviso.",
+  "reminderWontArriveMessage": "Con la fecha y hora de aviso que elegiste, el recordatorio ya no alcanza a llegar a tiempo (ya pasó). Se va a guardar igual, pero no vas a recibir ese aviso.",
+  "fixDateTime": "Corregir fecha/hora",
+  "saveAnyway": "Guardar igual",
+  "saveFailed": "No se pudo guardar",
+  "theme": "Tema",
+  "followSystemLanguage": "Seguir el idioma del celular",
+  "followSystemTheme": "Seguir el tema del celular",
+  "lightTheme": "Claro",
+  "darkTheme": "Oscuro",
+  "taskCreated": "Creaste la tarea con éxito",
+  "taskUpdated": "Actualizaste la tarea con éxito",
+  "taskDeleted": "Eliminaste la tarea con éxito",
+  "loggedOut": "Cerraste sesión con éxito",
+  "notificationDueBody": "Vence el {date}",
+  "@notificationDueBody": {
+    "placeholders": { "date": { "type": "String" } }
+  },
+  "notificationNudgeBody": "No marcaste esta tarea como hecha"
 }

@@ -76,23 +76,24 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
 
     if (!mounted) return true;
 
+    final t = AppLocalizations.of(context)!;
     final message = isPastDueDate
-        ? 'La fecha de esta tarea ya pasó. Se va a guardar igual, pero no vas a recibir ninguna notificación de aviso.'
-        : 'Con la fecha y hora de aviso que elegiste, el recordatorio ya no alcanza a llegar a tiempo (ya pasó). Se va a guardar igual, pero no vas a recibir ese aviso.';
+        ? t.taskDatePassedMessage
+        : t.reminderWontArriveMessage;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Aviso'),
+        title: Text(t.warningTitle),
         content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Corregir fecha/hora'),
+            child: Text(t.fixDateTime),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Guardar igual'),
+            child: Text(t.saveAnyway),
           ),
         ],
       ),
@@ -104,6 +105,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     if (_titleController.text.trim().isEmpty) return;
     if (_saving) return;
 
+    final t = AppLocalizations.of(context)!;
     final taskService = context.read<TaskService>();
     final notificationService = context.read<NotificationService>();
     final userId = context.read<AuthService>().currentUser!.uid;
@@ -134,15 +136,31 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     setState(() => _saving = true);
 
     try {
+      final dueBody = t.notificationDueBody(_formatDate(candidate.dueDate));
+      final nudgeBody = t.notificationNudgeBody;
+
       if (_isEditing) {
         await taskService.updateTask(candidate);
-        await notificationService.scheduleForTask(candidate);
+        await notificationService.scheduleForTask(
+          candidate,
+          dueBody: dueBody,
+          nudgeBody: nudgeBody,
+        );
       } else {
         final id = await taskService.createTask(candidate);
         final savedTask = TaskModel.fromMap(id, candidate.toMap());
-        await notificationService.scheduleForTask(savedTask);
+        await notificationService.scheduleForTask(
+          savedTask,
+          dueBody: dueBody,
+          nudgeBody: nudgeBody,
+        );
       }
 
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_isEditing ? t.taskUpdated : t.taskCreated)),
+      );
+      await Future.delayed(const Duration(seconds: 3));
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       // Si algo falla guardando en Firestore (sin internet y sin caché
@@ -151,11 +169,14 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       if (mounted) {
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo guardar: $e')),
+          SnackBar(content: Text('${t.saveFailed}: $e')),
         );
       }
     }
   }
+
+  String _formatDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   Future<void> _delete() async {
     final taskService = context.read<TaskService>();
@@ -175,8 +196,14 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     );
 
     if (confirmed == true && widget.existingTask != null) {
+      setState(() => _saving = true);
       await notificationService.cancelForTask(widget.existingTask!.id);
       await taskService.deleteTask(widget.existingTask!.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t.taskDeleted)),
+      );
+      await Future.delayed(const Duration(seconds: 3));
       if (mounted) Navigator.of(context).pop();
     }
   }

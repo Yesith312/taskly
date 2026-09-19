@@ -29,5 +29,25 @@
   "overdueReminder": "You haven't marked this task as done",
   "cancel": "Cancel",
   "confirmDeleteTitle": "Delete task?",
-  "confirmDeleteBody": "This action cannot be undone."
+  "confirmDeleteBody": "This action cannot be undone.",
+  "warningTitle": "Warning",
+  "taskDatePassedMessage": "This task's date has already passed. It will still be saved, but you won't get any reminder notification for it.",
+  "reminderWontArriveMessage": "With the date and reminder time you chose, the reminder no longer has time to arrive (it's already past). It will still be saved, but you won't get that reminder.",
+  "fixDateTime": "Fix date/time",
+  "saveAnyway": "Save anyway",
+  "saveFailed": "Couldn't save",
+  "theme": "Theme",
+  "followSystemLanguage": "Follow phone language",
+  "followSystemTheme": "Follow phone theme",
+  "lightTheme": "Light",
+  "darkTheme": "Dark",
+  "taskCreated": "Task created successfully",
+  "taskUpdated": "Task updated successfully",
+  "taskDeleted": "Task deleted successfully",
+  "loggedOut": "Signed out successfully",
+  "notificationDueBody": "Due {date}",
+  "@notificationDueBody": {
+    "placeholders": { "date": { "type": "String" } }
+  },
+  "notificationNudgeBody": "You haven't marked this task as done"
 }

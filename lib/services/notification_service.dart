@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
+import 'package:flutter_timezone/flutter_timezone.dart';
 import '../models/task.dart';
 
 /// Todas las notificaciones se programan LOCALMENTE en el dispositivo
@@ -22,6 +23,17 @@ class NotificationService {
 
   Future<void> init() async {
     tz_data.initializeTimeZones();
+
+    // Sin esto, la librería asume UTC por defecto y todos los avisos
+    // llegarían con el desfase de tu zona horaria (ej. 5 horas tarde
+    // en Colombia). Detectamos la zona horaria real del celular y se
+    // la indicamos explícitamente.
+    try {
+      final String timeZoneName = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(timeZoneName));
+    } catch (e) {
+      debugPrint('No se pudo detectar la zona horaria del celular: $e');
+    }
 
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -48,7 +60,15 @@ class NotificationService {
   int _reminderId(String taskId) => taskId.hashCode & 0x7fffffff;
   int _nudgeId(String taskId) => (taskId.hashCode ^ 0x5a5a5a5a) & 0x7fffffff;
 
-  Future<void> scheduleForTask(TaskModel task) async {
+  /// [dueBody] y [nudgeBody] ya vienen traducidos al idioma que la app
+  /// tiene configurado (no necesariamente el del celular) — se arman
+  /// afuera, con AppLocalizations, porque este servicio no tiene
+  /// acceso al widget tree.
+  Future<void> scheduleForTask(
+    TaskModel task, {
+    required String dueBody,
+    required String nudgeBody,
+  }) async {
     try {
       await cancelForTask(task.id);
       if (task.isDone) return; // no se avisa nada de una tarea ya hecha
@@ -68,7 +88,7 @@ class NotificationService {
         await _plugin.zonedSchedule(
           _reminderId(task.id),
           task.title,
-          'Vence el ${_formatDate(task.dueDate)}',
+          dueBody,
           tz.TZDateTime.from(reminderDateTime, tz.local),
           _details(),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -77,9 +97,6 @@ class NotificationService {
         );
       }
 
-      // Recordatorio semanal: empieza justo el día de la entrega, a la
-      // misma hora configurada, y se repite cada 7 días. Se cancela solo
-      // (con cancelForTask) en cuanto la tarea se marca como hecha.
       final nudgeStart = DateTime(
         task.dueDate.year,
         task.dueDate.month,
@@ -91,7 +108,7 @@ class NotificationService {
       await _plugin.zonedSchedule(
         _nudgeId(task.id),
         task.title,
-        'No marcaste esta tarea como hecha',
+        nudgeBody,
         tz.TZDateTime.from(nudgeStart, tz.local),
         _details(),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -100,10 +117,6 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
       );
     } catch (e, st) {
-      // Nunca dejamos que un error programando una notificación bloquee
-      // el resto de la app (crear/editar tareas debe seguir funcionando
-      // aunque, por ejemplo, el celular haya negado el permiso de
-      // alarmas exactas).
       debugPrint('No se pudo programar la notificación de "${task.title}": $e\n$st');
     }
   }

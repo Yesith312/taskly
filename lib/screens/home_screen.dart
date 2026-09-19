@@ -51,7 +51,11 @@ class _HomeScreenState extends State<HomeScreen> {
           // Cada vez que cambian las tareas, reprogramamos notificaciones
           // y refrescamos el widget de pantalla de inicio.
           for (final task in tasks) {
-            notificationService.scheduleForTask(task);
+            notificationService.scheduleForTask(
+              task,
+              dueBody: t.notificationDueBody(_formatDate(task.dueDate)),
+              nudgeBody: t.notificationNudgeBody,
+            );
           }
           widgetService.updateWidget(
             tasks.where((t) => t.dueDate.isAfter(DateTime.now())).toList()
@@ -115,6 +119,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+
+  String _formatDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 }
 
 class _EmptyState extends StatelessWidget {

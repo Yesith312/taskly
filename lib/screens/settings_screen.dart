@@ -18,13 +18,12 @@ class SettingsScreen extends StatelessWidget {
       appBar: AppBar(title: Text(t.settings)),
       body: ListView(
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('Idioma / Language',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(t.language, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
           RadioListTile<Locale?>(
-            title: const Text('Seguir el idioma del celular'),
+            title: Text(t.followSystemLanguage),
             value: null,
             groupValue: settings.locale,
             onChanged: (value) => settings.setLocale(value),
@@ -42,24 +41,24 @@ class SettingsScreen extends StatelessWidget {
             onChanged: (value) => settings.setLocale(value),
           ),
           const Divider(),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: Text('Tema', style: TextStyle(fontWeight: FontWeight.bold)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Text(t.theme, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
           RadioListTile<ThemeMode>(
-            title: const Text('Seguir el tema del celular'),
+            title: Text(t.followSystemTheme),
             value: ThemeMode.system,
             groupValue: settings.themeMode,
             onChanged: (value) => settings.setThemeMode(value!),
           ),
           RadioListTile<ThemeMode>(
-            title: const Text('Claro'),
+            title: Text(t.lightTheme),
             value: ThemeMode.light,
             groupValue: settings.themeMode,
             onChanged: (value) => settings.setThemeMode(value!),
           ),
           RadioListTile<ThemeMode>(
-            title: const Text('Oscuro'),
+            title: Text(t.darkTheme),
             value: ThemeMode.dark,
             groupValue: settings.themeMode,
             onChanged: (value) => settings.setThemeMode(value!),
@@ -70,6 +69,11 @@ class SettingsScreen extends StatelessWidget {
             title: Text(t.logout, style: const TextStyle(color: Colors.red)),
             onTap: () async {
               await auth.signOut();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(t.loggedOut)),
+              );
+              await Future.delayed(const Duration(seconds: 3));
               // Sin esto, la app se queda "atascada" en Ajustes aunque
               // ya cerraste sesión: hay que volver a la pantalla raíz
               // para que se muestre el login de nuevo.
