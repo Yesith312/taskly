@@ -80,18 +80,19 @@ class NotificationService {
   /// afuera, con AppLocalizations, porque este servicio no tiene
   /// acceso al widget tree.
   ///
-  /// Devuelve null si todo salió bien, o un texto describiendo el
-  /// error si algo falló — así la pantalla que llama a esto puede
-  /// mostrártelo, en vez de quedar oculto para siempre en el log.
-  Future<String?> scheduleForTask(
+  /// Devuelve un diagnóstico de texto (TEMPORAL, para depurar el bug
+  /// de las notificaciones): qué hora calculó, en qué zona horaria, y
+  /// si programó algo o no. Empieza con "ERROR:" si algo falló.
+  Future<String> scheduleForTask(
     TaskModel task, {
     required String dueBody,
     required String nudgeBody,
   }) async {
     try {
       await cancelForTask(task.id);
-      if (task.isDone) return null; // no se avisa nada de una tarea ya hecha
+      if (task.isDone) return 'Tarea marcada como hecha, no se programa nada.';
 
+      final now = DateTime.now();
       final reminderDate = task.dueDate.subtract(
         Duration(days: task.notifyDaysBefore),
       );
@@ -103,7 +104,13 @@ class NotificationService {
         task.notifyMinute,
       );
 
-      if (reminderDateTime.isAfter(DateTime.now())) {
+      final diag = StringBuffer();
+      diag.writeln('Zona horaria detectada: ${tz.local.name}');
+      diag.writeln('Ahora (celular): $now');
+      diag.writeln('Aviso "vence": $reminderDateTime'
+          '${reminderDateTime.isAfter(now) ? " (futuro, SÍ se programa)" : " (pasado, NO se programa)"}');
+
+      if (reminderDateTime.isAfter(now)) {
         await _plugin.zonedSchedule(
           _reminderId(task.id),
           task.title,
@@ -123,6 +130,7 @@ class NotificationService {
         task.notifyHour,
         task.notifyMinute,
       );
+      diag.writeln('Aviso "recordatorio semanal": $nudgeStart (siempre se programa)');
 
       await _plugin.zonedSchedule(
         _nudgeId(task.id),
@@ -135,10 +143,14 @@ class NotificationService {
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
       );
-      return null;
+
+      final pending = await _plugin.pendingNotificationRequests();
+      diag.writeln('Notificaciones pendientes en el sistema: ${pending.length}');
+
+      return diag.toString();
     } catch (e, st) {
       debugPrint('No se pudo programar la notificación de "${task.title}": $e\n$st');
-      return e.toString();
+      return 'ERROR: $e';
     }
   }
 
