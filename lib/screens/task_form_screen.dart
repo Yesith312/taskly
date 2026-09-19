@@ -142,37 +142,42 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       String notificationDiag = '';
 
       Future<void> saveAndSchedule() async {
+        final sw = Stopwatch()..start();
         if (_isEditing) {
           await taskService.updateTask(candidate);
+          final afterSave = sw.elapsedMilliseconds;
           notificationDiag = await notificationService.scheduleForTask(
             candidate,
             dueBody: dueBody,
             nudgeBody: nudgeBody,
           );
+          notificationDiag = 'Guardar en Firestore: ${afterSave}ms\n'
+              'Programar notificación: ${sw.elapsedMilliseconds - afterSave}ms\n\n'
+              '$notificationDiag';
         } else {
           final id = await taskService.createTask(candidate);
+          final afterSave = sw.elapsedMilliseconds;
           final savedTask = TaskModel.fromMap(id, candidate.toMap());
           notificationDiag = await notificationService.scheduleForTask(
             savedTask,
             dueBody: dueBody,
             nudgeBody: nudgeBody,
           );
+          notificationDiag = 'Guardar en Firestore: ${afterSave}ms\n'
+              'Programar notificación: ${sw.elapsedMilliseconds - afterSave}ms\n\n'
+              '$notificationDiag';
         }
       }
 
-      // Si en 4 segundos no responde (por ejemplo, mala conexión),
-      // seguimos igual: Firestore ya guardó localmente la tarea desde
-      // el momento en que se llamó, y se sincroniza sola en cuanto haya
-      // señal. Como la app debe funcionar sin internet, no tiene
-      // sentido bloquear al usuario esperando al servidor.
-      final pendingSave = saveAndSchedule();
-      try {
-        await pendingSave.timeout(const Duration(seconds: 4));
-      } on TimeoutException {
-        pendingSave.catchError((e) {
-          debugPrint('Guardado en segundo plano falló más tarde: $e');
-        });
-      }
+      // TEMPORAL: sin límite de tiempo esta vez, para ver el
+      // diagnóstico completo aunque tarde (así confirmamos si el
+      // problema es que Firestore está lento en este celular).
+      await saveAndSchedule().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          notificationDiag = 'ERROR: se agotaron los 30 segundos esperando.';
+        },
+      );
 
       if (!mounted) return;
 
