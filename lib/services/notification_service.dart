@@ -91,7 +91,7 @@ class NotificationService {
           dueBody,
           tz.TZDateTime.from(reminderDateTime, tz.local),
           _details(),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
         );
@@ -111,7 +111,7 @@ class NotificationService {
         nudgeBody,
         tz.TZDateTime.from(nudgeStart, tz.local),
         _details(),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,

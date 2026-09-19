@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/task.dart';
@@ -139,22 +140,29 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       final dueBody = t.notificationDueBody(_formatDate(candidate.dueDate));
       final nudgeBody = t.notificationNudgeBody;
 
-      if (_isEditing) {
-        await taskService.updateTask(candidate);
-        await notificationService.scheduleForTask(
-          candidate,
-          dueBody: dueBody,
-          nudgeBody: nudgeBody,
-        );
-      } else {
-        final id = await taskService.createTask(candidate);
-        final savedTask = TaskModel.fromMap(id, candidate.toMap());
-        await notificationService.scheduleForTask(
-          savedTask,
-          dueBody: dueBody,
-          nudgeBody: nudgeBody,
-        );
+      Future<void> saveAndSchedule() async {
+        if (_isEditing) {
+          await taskService.updateTask(candidate);
+          await notificationService.scheduleForTask(
+            candidate,
+            dueBody: dueBody,
+            nudgeBody: nudgeBody,
+          );
+        } else {
+          final id = await taskService.createTask(candidate);
+          final savedTask = TaskModel.fromMap(id, candidate.toMap());
+          await notificationService.scheduleForTask(
+            savedTask,
+            dueBody: dueBody,
+            nudgeBody: nudgeBody,
+          );
+        }
       }
+
+      // Si algo se cuelga (ej. problema de conexión con Firestore que
+      // no da error, solo no responde), esto evita que la pantalla se
+      // quede cargando para siempre sin explicación.
+      await saveAndSchedule().timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -164,12 +172,16 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       // Si algo falla guardando en Firestore (sin internet y sin caché
-      // local todavía, por ejemplo), avisamos en vez de quedarnos
-      // pegados en esta pantalla sin explicación.
+      // local todavía, por ejemplo, o si se agotó el tiempo de espera),
+      // avisamos en vez de quedarnos pegados en esta pantalla sin
+      // explicación.
       if (mounted) {
         setState(() => _saving = false);
+        final isTimeout = e is TimeoutException;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.saveFailed}: $e')),
+          SnackBar(
+            content: Text(isTimeout ? '${t.saveFailed} (tiempo agotado)' : '${t.saveFailed}: $e'),
+          ),
         );
       }
     }
@@ -197,14 +209,26 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
 
     if (confirmed == true && widget.existingTask != null) {
       setState(() => _saving = true);
-      await notificationService.cancelForTask(widget.existingTask!.id);
-      await taskService.deleteTask(widget.existingTask!.id);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.taskDeleted)),
-      );
-      await Future.delayed(const Duration(seconds: 3));
-      if (mounted) Navigator.of(context).pop();
+      try {
+        await Future(() async {
+          await notificationService.cancelForTask(widget.existingTask!.id);
+          await taskService.deleteTask(widget.existingTask!.id);
+        }).timeout(const Duration(seconds: 10));
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t.taskDeleted)),
+        );
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) Navigator.of(context).pop();
+      } catch (e) {
+        if (mounted) {
+          setState(() => _saving = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${t.saveFailed}: $e')),
+          );
+        }
+      }
     }
   }
 

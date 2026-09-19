@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Este script lo corre GitHub Actions (no tienes que ejecutarlo tú a mano).
+# Arma todo lo que en Termux hubieras tenido que copiar/pegar manualmente:
+#  - genera android/ con `flutter create`
+#  - copia los archivos del widget nativo
+#  - registra el widget en AndroidManifest.xml
+#  - rellena lib/firebase_options.dart con las claves de Firebase (desde Secrets)
 set -euo pipefail
 
 echo "== 1. Generando carpeta android/ (si falta) =="
@@ -23,6 +29,14 @@ import sys
 path = sys.argv[1]
 with open(path) as f:
     content = f.read()
+
+# Permisos necesarios para que las notificaciones funcionen en Android
+# 13+ (sin esto, pedir permiso de notificaciones no hace nada).
+permissions = '''    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+'''
+before_application, after_application = content.split('<application', 1)
+content = before_application + permissions + '<application' + after_application
 
 receiver = '''
         <receiver android:name=".TasklyWidgetProvider" android:exported="false">
@@ -66,3 +80,4 @@ sed -i \
   lib/firebase_options.dart
 
 echo "== Listo, carpeta android/ configurada =="
+
