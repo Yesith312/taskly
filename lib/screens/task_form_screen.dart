@@ -159,10 +159,19 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         }
       }
 
-      // Si algo se cuelga (ej. problema de conexión con Firestore que
-      // no da error, solo no responde), esto evita que la pantalla se
-      // quede cargando para siempre sin explicación.
-      await saveAndSchedule().timeout(const Duration(seconds: 10));
+      // Si en 4 segundos no responde (por ejemplo, mala conexión),
+      // seguimos igual: Firestore ya guardó localmente la tarea desde
+      // el momento en que se llamó, y se sincroniza sola en cuanto haya
+      // señal. Como la app debe funcionar sin internet, no tiene
+      // sentido bloquear al usuario esperando al servidor.
+      final pendingSave = saveAndSchedule();
+      try {
+        await pendingSave.timeout(const Duration(seconds: 4));
+      } on TimeoutException {
+        pendingSave.catchError((e) {
+          debugPrint('Guardado en segundo plano falló más tarde: $e');
+        });
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -171,17 +180,13 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       await Future.delayed(const Duration(seconds: 3));
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      // Si algo falla guardando en Firestore (sin internet y sin caché
-      // local todavía, por ejemplo, o si se agotó el tiempo de espera),
-      // avisamos en vez de quedarnos pegados en esta pantalla sin
-      // explicación.
+      // Un error real (ej. permiso denegado) sí se muestra de una vez;
+      // el caso de "tardó mucho por mala conexión" ya no llega aquí,
+      // se maneja arriba de forma optimista.
       if (mounted) {
         setState(() => _saving = false);
-        final isTimeout = e is TimeoutException;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isTimeout ? '${t.saveFailed} (tiempo agotado)' : '${t.saveFailed}: $e'),
-          ),
+          SnackBar(content: Text('${t.saveFailed}: $e')),
         );
       }
     }
@@ -210,10 +215,17 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     if (confirmed == true && widget.existingTask != null) {
       setState(() => _saving = true);
       try {
-        await Future(() async {
+        final pendingDelete = Future(() async {
           await notificationService.cancelForTask(widget.existingTask!.id);
           await taskService.deleteTask(widget.existingTask!.id);
-        }).timeout(const Duration(seconds: 10));
+        });
+        try {
+          await pendingDelete.timeout(const Duration(seconds: 4));
+        } on TimeoutException {
+          pendingDelete.catchError((e) {
+            debugPrint('Eliminación en segundo plano falló más tarde: $e');
+          });
+        }
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
