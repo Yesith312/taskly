@@ -45,14 +45,29 @@ class NotificationService {
 
     await _plugin.initialize(settings);
 
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(alert: true, badge: true, sound: true);
+    try {
+      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+      await androidPlugin?.requestNotificationsPermission();
+
+      // En Android 12+ hay que pedir aparte el permiso de "alarmas
+      // exactas" — si no se concede, las notificaciones programadas
+      // pueden llegar tarde o directamente no llegar. Esto abre la
+      // pantalla de ajustes del sistema para que el usuario lo active
+      // (no hay forma de concederlo con un simple diálogo).
+      final canScheduleExact = await androidPlugin?.canScheduleExactNotifications();
+      if (canScheduleExact == false) {
+        await androidPlugin?.requestExactAlarmsPermission();
+      }
+
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
+    } catch (e) {
+      debugPrint('No se pudieron pedir los permisos de notificaciones: $e');
+    }
   }
 
   // IDs de notificación derivados del id de Firestore para poder
@@ -91,7 +106,7 @@ class NotificationService {
           dueBody,
           tz.TZDateTime.from(reminderDateTime, tz.local),
           _details(),
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
         );
@@ -111,7 +126,7 @@ class NotificationService {
         nudgeBody,
         tz.TZDateTime.from(nudgeStart, tz.local),
         _details(),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,

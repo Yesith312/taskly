@@ -34,6 +34,7 @@ with open(path) as f:
 # 13+ (sin esto, pedir permiso de notificaciones no hace nada).
 permissions = '''    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 '''
 before_application, after_application = content.split('<application', 1)
 content = before_application + permissions + '<application' + after_application
