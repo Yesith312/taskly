@@ -79,14 +79,18 @@ class NotificationService {
   /// tiene configurado (no necesariamente el del celular) — se arman
   /// afuera, con AppLocalizations, porque este servicio no tiene
   /// acceso al widget tree.
-  Future<void> scheduleForTask(
+  ///
+  /// Devuelve null si todo salió bien, o un texto describiendo el
+  /// error si algo falló — así la pantalla que llama a esto puede
+  /// mostrártelo, en vez de quedar oculto para siempre en el log.
+  Future<String?> scheduleForTask(
     TaskModel task, {
     required String dueBody,
     required String nudgeBody,
   }) async {
     try {
       await cancelForTask(task.id);
-      if (task.isDone) return; // no se avisa nada de una tarea ya hecha
+      if (task.isDone) return null; // no se avisa nada de una tarea ya hecha
 
       final reminderDate = task.dueDate.subtract(
         Duration(days: task.notifyDaysBefore),
@@ -131,8 +135,10 @@ class NotificationService {
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
       );
+      return null;
     } catch (e, st) {
       debugPrint('No se pudo programar la notificación de "${task.title}": $e\n$st');
+      return e.toString();
     }
   }
 

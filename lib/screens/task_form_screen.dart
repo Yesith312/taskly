@@ -139,11 +139,12 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     try {
       final dueBody = t.notificationDueBody(_formatDate(candidate.dueDate));
       final nudgeBody = t.notificationNudgeBody;
+      String? notificationError;
 
       Future<void> saveAndSchedule() async {
         if (_isEditing) {
           await taskService.updateTask(candidate);
-          await notificationService.scheduleForTask(
+          notificationError = await notificationService.scheduleForTask(
             candidate,
             dueBody: dueBody,
             nudgeBody: nudgeBody,
@@ -151,7 +152,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         } else {
           final id = await taskService.createTask(candidate);
           final savedTask = TaskModel.fromMap(id, candidate.toMap());
-          await notificationService.scheduleForTask(
+          notificationError = await notificationService.scheduleForTask(
             savedTask,
             dueBody: dueBody,
             nudgeBody: nudgeBody,
@@ -174,10 +175,24 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isEditing ? t.taskUpdated : t.taskCreated)),
-      );
-      await Future.delayed(const Duration(seconds: 3));
+
+      // TEMPORAL, para encontrar el bug de las notificaciones: si algo
+      // falló al programarlas, te lo muestro tal cual en pantalla en
+      // vez de solo dejarlo en el log (que no puedes ver fácilmente).
+      if (notificationError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Notificación: $notificationError'),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+        await Future.delayed(const Duration(seconds: 6));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_isEditing ? t.taskUpdated : t.taskCreated)),
+        );
+        await Future.delayed(const Duration(seconds: 3));
+      }
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       // Un error real (ej. permiso denegado) sí se muestra de una vez;
