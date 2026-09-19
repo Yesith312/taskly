@@ -32,7 +32,9 @@ with open(path) as f:
 
 # Permisos necesarios para que las notificaciones funcionen en Android
 # 13+ (sin esto, pedir permiso de notificaciones no hace nada).
-permissions = '''    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+permissions = '''    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 '''
